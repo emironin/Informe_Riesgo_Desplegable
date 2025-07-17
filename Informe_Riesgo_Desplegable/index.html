@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Informe de Riesgo</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1d4ed8">
+<link rel="apple-touch-icon" href="icons/icon-192x192.png">
+<style>
+/* Custom styles */
+body {
+    font-family: 'Inter', sans-serif;
+}
+/* Hide file input default UI, but make sure the label is clickable */
+input[type="file"] {
+    position: absolute; /* Hide visually but keep accessible for click events */
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+}
+/* Custom styles for the report area to ensure clean PDF export */
+#report-content {
+    box-shadow: none; /* Asegura que la sombra no se capture en el PDF */
+}
+/* Styling for the risk level display */
+#risk-result-box {
+    transition: all 0.3s ease-in-out;
+    min-height: 60px; /* Ensure it has a visible height even when empty */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #e2e8f0; /* Default border */
+}
+.image-thumbnail-container {
+    position: relative;
+    display: inline-block;
+    margin: 5px;
+    border: 1px solid #e2e8f0; /* Add a subtle border */
+    border-radius: 8px;
+    overflow: hidden; /* Ensure image corners match container */
+}
+.image-thumbnail {
+    width: 100px;
+    height: 100px;
+    object-fit: cover;
+    display: block; /* Remove extra space below image */
+}
+.delete-image-btn {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background-color: rgb(239 68 68);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 24px; /* Increased size */
+    height: 24px; /* Increased size */
+    font-size: 0.9rem; /* Increased font size */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    z-index: 10; /* Ensure it's above the image */
+}
+/* PWA Install Button */
+#install-app-button {
+    display: none; /* Hidden by default */
+    background-color: #1d4ed8;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    margin-top: 1rem;
+}
+</style>
+</head>
+<body class="bg-gray-100">
+<div class="container mx-auto max-w-2xl p-4 sm:p-6 lg:p-8">
+<header class="text-center mb-6">
+<h1 class="text-3xl font-bold text-gray-800">Informe de Riesgo</h1>
+<p class="text-sm text-gray-500">Creado por JAE SISTEMAS</p>
+</header>
+<main id="report-content" class="bg-white p-6 rounded-lg shadow-lg">
+<div class="grid grid-cols-3 gap-4 mb-6 items-center pdf-section">
+<div class="col-span-1">
+<label for="logo-upload" class="cursor-pointer block w-full h-auto aspect-square
+bg-gray-200 rounded-md flex items-center justify-center text-gray-500 hover:bg-gray-300
+transition-colors">
+<img id="logo-preview"
+src="https://placehold.co/150x150/e2e8f0/cbd5e0?text=Logo" alt="Logo de la empresa"
+class="w-full h-full object-contain rounded-md">
+</label>
+<input id="logo-upload" type="file" accept="image/*">
+</div>
+<div class="col-span-2 space-y-3">
+<input id="company-name" type="text" placeholder="Nombre de la Empresa"
+class="w-full p-2 border rounded-md">
+<input id="cuit" type="text" placeholder="CUIT" class="w-full p-2 border rounded-md">
+<input id="phone" type="tel" placeholder="Teléfono" class="w-full p-2 border
+rounded-md">
+<input id="email" type="email" placeholder="E-mail" class="w-full p-2 border
+rounded-md">
+</div>
+</div>
+<div class="mb-6 pdf-section">
+<p class="text-sm text-gray-600"><strong>Fecha y Hora:</strong> <span
+id="datetime"></span></p>
+</div>
+<hr class="mb-6">
+<div class="grid md:grid-cols-2 gap-6 mb-6">
+<div class="pdf-section">
+<div>
+<h2 class="font-bold text-lg mb-2">Fotografía de Evidencia</h2>
+<div id="photo-previews-container" class="flex flex-wrap gap-2 mb-4 p-2 border
+rounded-md bg-gray-50 min-h-[120px] items-center justify-center">
+<p id="no-photos-message" class="text-gray-400 text-sm">No hay fotos de
+evidencia aún.</p>
+</div>
+<label for="photo-upload" id="add-photo-label" class="bg-blue-500 text-white
+py-2 px-4 rounded-md hover:bg-blue-600 transition-colors cursor-pointer inline-block">
+Tomar Foto
+</label>
+<input id="photo-upload" type="file" accept="image/*" capture="environment">
+<canvas id="photo-canvas" class="hidden"></canvas>
+</div>
+</div>
+<div class="pdf-section">
+<div>
+<h2 class="font-bold text-lg mb-2">Nivel de Riesgo</h2>
+<div class="space-y-4">
+<div>
+<label for="probabilidad" class="block text-sm font-medium text-gray-700
+mb-1">Probabilidad</label>
+<select id="probabilidad" class="w-full p-2 border border-gray-300 rounded-
+md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+<option value="">Seleccione</option>
+<option value="MUY POCO PROBABLE">Muy Poco Probable</option>
+<option value="POCO PROBABLE">Poco Probable</option>
+<option value="PROBABLE">Probable</option>
+</select>
+</div>
+<div>
+<label for="gravedad" class="block text-sm font-medium text-gray-700 mb-
+1">Gravedad</label>
+<select id="gravedad" class="w-full p-2 border border-gray-300 rounded-md
+shadow-sm focus:ring-blue-500 focus:border-blue-500">
+<option value="">Seleccione</option>
+<option value="LIGERAMENTE DAÑINO">Ligeramente Dañino</option>
+<option value="DAÑINO">Dañino</option>
+<option value="EXTREMADAMENTE DAÑINO">Extremadamente
+Dañino</option>
+</select>
+</div>
+</div>
+</div>
+</div>
+</div>
+<hr class="my-6">
+<div class="mb-6 pdf-section">
+<label for="ubicacion" class="block text-sm font-medium text-gray-700 mb-
+1">Ubicacion</label>
+<input id="ubicacion" type="text" class="w-full p-2 border rounded-md"
+placeholder="Ingrese la ubicacion">
+</div>
+<div class="mb-6 pdf-section">
+<h2 class="font-bold text-lg mb-2">Observaciones</h2>
+<textarea id="observations" rows="5" class="w-full p-2 border rounded-md"
+placeholder="Escriba aqui sus observaciones..."></textarea>
+</div>
+<div class="space-y-6 mt-6 pdf-section" id="second-page-section">
+<div>
+<label for="tipo-de-riesgo" class="block text-sm font-medium text-gray-700 mb-
+1">Tipo de Riesgo</label>
+<input id="tipo-de-riesgo" type="text" class="w-full p-2 border rounded-md"
+placeholder="Ingrese el tipo de riesgo">
+</div>
+<div class="pb-4">
+<label class="block text-sm font-medium text-gray-700 mb-1">Ponderacion de
+Riesgo</label>
+<div id="risk-result-box" class="p-4 rounded-md text-center" style="background-color: white;">
+<p id="risk-display-text" class="font-bold uppercase text-gray-800 text-xl"></p>
+</div>
+<p class="text-xs text-gray-500 mt-2">SE DETERMINA EL NIVEL DE RIESGO DE
+ACUERDO A LA NORMA IRAM 3801</p>
+</div>
+<div>
+<label for="lesiones-potenciales" class="block text-sm font-medium text-gray-700
+mb-1">Lesiones Potenciales</label>
+<textarea id="lesiones-potenciales" rows="3" class="w-full p-2 border rounded-md"
+placeholder="Describa las lesiones potenciales..."></textarea>
+</div>
+<div>
+<label for="medida-correctiva" class="block text-sm font-medium text-gray-700
+mb-1">Medida Correctiva Propuesta</label>
+<textarea id="medida-correctiva" rows="3" class="w-full p-2 border rounded-md"
+placeholder="Describa la medida correctiva propuesta..."></textarea>
+</div>
+</div>
+</main>
+<footer class="mt-6 text-center">
+<button id="export-pdf" class="bg-blue-600 text-white font-bold py-3 px-8 rounded-lg
+hover:bg-blue-700 transition-all shadow-md w-full sm:w-auto">
+Generar y Exportar PDF
+</button>
+<button id="install-app-button">Instalar Aplicacion</button>
+</footer>
+</div>
+<div id="add-another-photo-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 hidden z-50">
+    <div class="bg-white rounded-lg shadow-xl p-4 max-w-xs w-full text-center">
+        <h3 class="text-base font-medium text-gray-900 mb-2">¿Desea agregar otra foto?</h3>
+        <div class="flex justify-center gap-2">
+            <button id="add-photo-no" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">No</button>
+            <button id="add-photo-yes" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Si</button>
+        </div>
+    </div>
+</div>
+<div id="email-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-
+center p-4 hidden z-50">
+<div class="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full text-center">
+<h3 class="text-lg font-medium text-gray-900 mb-2">PDF Generado</h3>
+<p class="text-sm text-gray-600 mb-4">El informe se ha descargado. ¿Deseas enviarlo
+por correo electronico?</p>
+<div class="flex justify-center gap-4">
+<button id="email-no" class="px-6 py-2 bg-gray-200 text-gray-800 rounded-md
+hover:bg-gray-300">No</button>
+<button id="email-yes" class="px-6 py-2 bg-blue-600 text-white rounded-md
+hover:bg-blue-700">Si, Enviar</button>
+</div>
+</div>
+</div>
+<div id="loading-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 hidden z-50">
+<div class="bg-white rounded-lg shadow-xl p-8 text-center">
+<p class="text-lg font-medium text-gray-900">Generando PDF...</p>
+</div>
+</div>
+<script>
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    document.getElementById('install-app-button').style.display = 'block';
+});
+
+document.getElementById('install-app-button').addEventListener('click', async () => {
+    if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        console.log(`User response to the install prompt: ${outcome}`);
+        deferredPrompt = null;
+        document.getElementById('install-app-button').style.display = 'none';
+    }
+});
+
+window.addEventListener('appinstalled', () => {
+    document.getElementById('install-app-button').style.display = 'none';
+});
+
+document.addEventListener('DOMContentLoaded', function () {
+    // ELEMENTS
+    const logoUpload = document.getElementById('logo-upload');
+    const logoPreview = document.getElementById('logo-preview');
+    const photoUpload = document.getElementById('photo-upload');
+    const photoPreviewsContainer = document.getElementById('photo-previews-container');
+    const noPhotosMessage = document.getElementById('no-photos-message');
+    const photoCanvas = document.getElementById('photo-canvas');
+    const probabilidadSelect = document.getElementById('probabilidad');
+    const gravedadSelect = document.getElementById('gravedad');
+    const riskResultBox = document.getElementById('risk-result-box');
+    const riskDisplayText = document.getElementById('risk-display-text');
+    const exportPdfBtn = document.getElementById('export-pdf');
+    const emailModal = document.getElementById('email-modal');
+    const loadingModal = document.getElementById('loading-modal');
+    const addAnotherPhotoModal = document.getElementById('add-another-photo-modal');
+    const addPhotoYesBtn = document.getElementById('add-photo-yes');
+    const addPhotoNoBtn = document.getElementById('add-photo-no');
+    const emailYesBtn = document.getElementById('email-yes');
+    const emailNoBtn = document.getElementById('email-no');
+    const observationsTextarea = document.getElementById('observations');
+    const ubicacionInput = document.getElementById('ubicacion');
+    const tipoDeRiesgoInput = document.getElementById('tipo-de-riesgo');
+    const lesionesPotencialesTextarea = document.getElementById('lesiones-potenciales');
+    const medidaCorrectivaTextarea = document.getElementById('medida-correctiva');
+    const reportContent = document.getElementById('report-content');
+    const secondPageSection = document.getElementById('second-page-section'); // La nueva sección para la segunda página
+
+    const companyNameInput = document.getElementById('company-name');
+    const cuitInput = document.getElementById('cuit');
+    const phoneInput = document.getElementById('phone');
+    const emailInput = document.getElementById('email');
+
+    let capturedImages = [];
+    let pdfBlob = null;
+
+    // --- INITIALIZATION ---
+    const now = new Date();
+    document.getElementById('datetime').textContent = now.toLocaleString('es-AR');
+
+    updateNoPhotosMessage();
+
+    // --- CONFIGURACIÓN DE TAMAÑO DE FOTO PARA CAPTURA ---
+    const PHOTO_CAPTURE_WIDTH_PX = 800;
+    const PHOTO_CAPTURE_HEIGHT_PX = 600;
+    if (photoCanvas) {
+        photoCanvas.width = PHOTO_CAPTURE_WIDTH_PX;
+        photoCanvas.height = PHOTO_CAPTURE_HEIGHT_PX;
+    }
+
+    // --- FUNCTIONS ---
+
+    function calculateRisk() {
+        const probabilidad = probabilidadSelect ? probabilidadSelect.value : '';
+        const gravedad = gravedadSelect ? gravedadSelect.value : '';
+
+        let riskLevel = "";
+        let bgColor = "white";
+        let textColor = '#cbd5e0';
+
+        if (riskResultBox) {
+            riskResultBox.style.backgroundColor = "white";
+            riskResultBox.classList.remove('border');
+        }
+        if (riskDisplayText) {
+            riskDisplayText.style.color = textColor;
+            riskDisplayText.classList.remove('font-bold', 'uppercase', 'text-xl', 'text-gray-800');
+        }
+
+        if (!probabilidad || !gravedad) {
+            if (riskDisplayText) riskDisplayText.textContent = "SELECCIONE PROBABILIDAD Y GRAVEDAD";
+            if (riskResultBox) riskResultBox.style.backgroundColor = "white";
+            if (riskDisplayText) riskDisplayText.style.color = '#cbd5e0';
+            if (riskResultBox) riskResultBox.classList.add('border');
+            return;
+        }
+
+        textColor = '#1f2937';
+
+        if (probabilidad === "MUY POCO PROBABLE") {
+            if (gravedad === "LIGERAMENTE DAÑINO") {
+                riskLevel = "RIESGO NO SIGNIFICATIVO";
+                bgColor = "white";
+            } else if (gravedad === "DAÑINO") {
+                riskLevel = "RIESGO POCO SIGNIFICATIVO";
+                bgColor = "#d1fae5";
+            } else if (gravedad === "EXTREMADAMENTE DAÑINO") {
+                riskLevel = "RIESGO MODERADO";
+                bgColor = "#fef9c3";
+            }
+        } else if (probabilidad === "POCO PROBABLE") {
+            if (gravedad === "LIGERAMENTE DAÑINO") {
+                riskLevel = "RIESGO POCO SIGNIFICATIVO";
+                bgColor = "#d1fae5";
+            } else if (gravedad === "DAÑINO") {
+                riskLevel = "RIESGO MODERADO";
+                bgColor = "#fef9c3";
+            } else if (gravedad === "EXTREMADAMENTE DAÑINO") {
+                riskLevel = "RIESGO SIGNIFICATIVO";
+                bgColor = "#ffedd5";
+            }
+        } else if (probabilidad === "PROBABLE") {
+            if (gravedad === "LIGERAMENTE DAÑINO") {
+                riskLevel = "RIESGO MODERADO";
+                bgColor = "#fef9c3";
+            } else if (gravedad === "DAÑINO") {
+                riskLevel = "RIESGO SIGNIFICATIVO";
+                bgColor = "#ffedd5";
+            } else if (gravedad === "EXTREMADAMENTE DAÑINO") {
+                riskLevel = "RIESGO INTOLERABLE";
+                bgColor = "#fee2e2";
+            }
+        }
+
+        if (riskDisplayText) {
+            riskDisplayText.textContent = riskLevel;
+            riskDisplayText.style.color = textColor;
+            riskDisplayText.classList.add('font-bold', 'uppercase', 'text-xl');
+        }
+        if (riskResultBox) {
+            riskResultBox.style.backgroundColor = bgColor;
+            riskResultBox.classList.add('border');
+        }
+    }
+
+    function addThumbnail(imageDataUrl) {
+        const imgContainer = document.createElement('div');
+        imgContainer.className = 'image-thumbnail-container';
+
+        const img = document.createElement('img');
+        img.src = imageDataUrl;
+        img.className = 'image-thumbnail';
+        imgContainer.appendChild(img);
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'delete-image-btn';
+        deleteBtn.innerHTML = '&times;';
+        deleteBtn.onclick = function() {
+            const index = capturedImages.indexOf(imageDataUrl);
+            if (index > -1) {
+                capturedImages.splice(index, 1);
+            }
+            imgContainer.remove();
+            updateNoPhotosMessage();
+        };
+        imgContainer.appendChild(deleteBtn);
+
+        if (photoPreviewsContainer) {
+            photoPreviewsContainer.appendChild(imgContainer);
+        }
+        updateNoPhotosMessage();
+    }
+
+    function updateNoPhotosMessage() {
+        if (noPhotosMessage) {
+            if (capturedImages.length === 0) {
+                noPhotosMessage.classList.remove('hidden');
+            } else {
+                noPhotosMessage.classList.add('hidden');
+            }
+        }
+    }
+
+    function clearFormData() {
+        if (companyNameInput) companyNameInput.value = '';
+        if (cuitInput) cuitInput.value = '';
+        if (phoneInput) phoneInput.value = '';
+        if (emailInput) emailInput.value = '';
+        if (ubicacionInput) ubicacionInput.value = '';
+        if (observationsTextarea) observationsTextarea.value = '';
+        if (tipoDeRiesgoInput) tipoDeRiesgoInput.value = '';
+        if (lesionesPotencialesTextarea) lesionesPotencialesTextarea.value = '';
+        if (medidaCorrectivaTextarea) medidaCorrectivaTextarea.value = '';
+        if (logoPreview) logoPreview.src = "https://placehold.co/150x150/e2e8f0/cbd5e0?text=Logo";
+
+        if (probabilidadSelect) probabilidadSelect.value = '';
+        if (gravedadSelect) gravedadSelect.value = '';
+        calculateRisk();
+
+        capturedImages = [];
+        if (photoPreviewsContainer) photoPreviewsContainer.innerHTML = '';
+        updateNoPhotosMessage();
+
+        pdfBlob = null;
+    }
+
+    // --- EVENT LISTENERS ---
+
+    if (logoUpload) {
+        logoUpload.addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    if (logoPreview) logoPreview.src = e.target.result;
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+
+    if (photoUpload) {
+        photoUpload.addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.onload = function() {
+                        if (!photoCanvas) {
+                            console.error("Canvas para fotos no encontrado.");
+                            return;
+                        }
+                        const ctx = photoCanvas.getContext('2d');
+                        ctx.clearRect(0, 0, photoCanvas.width, photoCanvas.height);
+                        ctx.fillStyle = 'white';
+                        ctx.fillRect(0, 0, photoCanvas.width, photoCanvas.height);
+                        const imgAspectRatio = img.width / img.height;
+                        const canvasAspectRatio = photoCanvas.width / photoCanvas.height;
+                        let sx, sy, sWidth, sHeight;
+
+                        // Recortar y escalar la imagen para que quepa en el canvas sin distorsión
+                        if (imgAspectRatio > canvasAspectRatio) {
+                            sHeight = img.height;
+                            sWidth = sHeight * canvasAspectRatio;
+                            sx = (img.width - sWidth) / 2;
+                            sy = 0;
+                        } else {
+                            sWidth = img.width;
+                            sHeight = sWidth / canvasAspectRatio;
+                            sy = (img.height - sHeight) / 2;
+                            sx = 0;
+                        }
+
+                        ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, photoCanvas.width,
+                            photoCanvas.height);
+                        const imageDataUrl = photoCanvas.toDataURL('image/jpeg', 0.9);
+
+                        capturedImages.push(imageDataUrl);
+                        addThumbnail(imageDataUrl); // Añadir miniatura a la UI
+
+                        if (addAnotherPhotoModal) {
+                            addAnotherPhotoModal.classList.remove('hidden');
+                        }
+                    }
+                    img.src = e.target.result;
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+
+    if (addPhotoYesBtn) {
+        addPhotoYesBtn.addEventListener('click', () => {
+            if (addAnotherPhotoModal) addAnotherPhotoModal.classList.add('hidden');
+            if (photoUpload) photoUpload.click();
+        });
+    }
+
+    if (addPhotoNoBtn) {
+        addPhotoNoBtn.addEventListener('click', () => {
+            if (addAnotherPhotoModal) addAnotherPhotoModal.classList.add('hidden');
+        });
+    }
+
+    if (probabilidadSelect) probabilidadSelect.addEventListener('change', calculateRisk);
+    if (gravedadSelect) gravedadSelect.addEventListener('change', calculateRisk);
+
+    calculateRisk();
+
+    if (exportPdfBtn) {
+        exportPdfBtn.addEventListener('click', async function() {
+            if (loadingModal) loadingModal.classList.remove('hidden');
+
+            if (!reportContent) {
+                console.error("El elemento 'report-content' no fue encontrado.");
+                if (loadingModal) loadingModal.classList.add('hidden');
+                alert('Hubo un error al generar el PDF. Elemento principal no encontrado.');
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF('p', 'mm', 'a4');
+
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+            const margin = 10;
+            const contentWidth = pdfWidth - (margin * 2);
+
+            // --- Function to apply transformations on the cloned document for PDF ---
+            const applyClonedTransformations = (clonedDoc) => {
+                const mainContainer = clonedDoc.querySelector('.container.mx-auto.max-w-2xl');
+                if (mainContainer) {
+                    mainContainer.style.width = '794px';
+                    mainContainer.style.paddingLeft = '20px';
+                    mainContainer.style.paddingRight = '20px';
+                }
+
+                // Apply values from original inputs/textareas to their cloned counterparts
+                const clonedCompanyName = clonedDoc.getElementById('company-name');
+                if (clonedCompanyName) clonedCompanyName.value = companyNameInput.value;
+                const clonedCuit = clonedDoc.getElementById('cuit');
+                if (clonedCuit) clonedCuit.value = cuitInput.value;
+                const clonedPhone = clonedDoc.getElementById('phone');
+                if (clonedPhone) clonedPhone.value = phoneInput.value;
+
+                // --- Email Input to Text Div ---
+                const originalEmailInput = document.getElementById('email');
+                const clonedEmailInput = clonedDoc.getElementById('email');
+                if (originalEmailInput && clonedEmailInput) {
+                    const emailValue = originalEmailInput.value;
+                    const emailDiv = clonedDoc.createElement('div');
+                    emailDiv.textContent = emailValue || 'No especificado';
+                    emailDiv.className = 'w-full p-2 border rounded-md text-gray-800';
+                    emailDiv.style.minHeight = '42px';
+                    emailDiv.style.display = 'flex';
+                    emailDiv.style.alignItems = 'center';
+                    clonedEmailInput.parentNode.replaceChild(emailDiv, clonedEmailInput);
+                }
+
+                const clonedObservations = clonedDoc.getElementById('observations');
+                if (clonedObservations) clonedObservations.textContent = observationsTextarea.value;
+                
+                // --- Manejo de Ubicación para el PDF (Input a Texto Estático) ---
+                const clonedUbicacionInput = clonedDoc.getElementById('ubicacion');
+                const originalUbicacionValue = ubicacionInput.value;
+                if (clonedUbicacionInput) {
+                    clonedUbicacionInput.style.display = 'none'; // Ocultar el input
+                    const pElement = clonedDoc.createElement('p');
+                    pElement.className = 'text-gray-800 text-base font-medium'; // Estilo para el texto
+                    pElement.textContent = originalUbicacionValue || 'No especificado';
+                    clonedUbicacionInput.parentNode.appendChild(pElement);
+                }
+
+                // --- Manejo de Tipo de Riesgo para el PDF (Input a Texto Estático) ---
+                const clonedTipoDeRiesgoInput = clonedDoc.getElementById('tipo-de-riesgo');
+                const originalTipoDeRiesgoValue = tipoDeRiesgoInput.value;
+                if (clonedTipoDeRiesgoInput) {
+                    clonedTipoDeRiesgoInput.style.display = 'none'; // Ocultar el input
+                    const pElement = clonedDoc.createElement('p');
+                    pElement.className = 'text-gray-800 text-base font-medium'; // Estilo para el texto
+                    pElement.textContent = originalTipoDeRiesgoValue || 'No especificado';
+                    clonedTipoDeRiesgoInput.parentNode.appendChild(pElement);
+                }
+
+                const clonedLesionesPotenciales = clonedDoc.getElementById('lesiones-potenciales');
+                if (clonedLesionesPotenciales) clonedLesionesPotenciales.textContent = lesionesPotencialesTextarea.value;
+                const clonedMedidaCorrectiva = clonedDoc.getElementById('medida-correctiva');
+                if (clonedMedidaCorrectiva) clonedMedidaCorrectiva.textContent = medidaCorrectivaTextarea.value;
+
+                // Expand textareas to show full content
+                const textareas = clonedDoc.querySelectorAll('textarea');
+                textareas.forEach(textarea => {
+                    if (textarea) {
+                        textarea.style.overflow = 'visible';
+                        textarea.style.height = 'auto';
+                        textarea.style.minHeight = textarea.scrollHeight + 'px';
+                    }
+                });
+
+                // Replace select inputs with their selected text
+                const selectedProbabilidad = probabilidadSelect &&
+                    probabilidadSelect.options[probabilidadSelect.selectedIndex] ?
+                    probabilidadSelect.options[probabilidadSelect.selectedIndex].text : '';
+                const selectedGravedad = gravedadSelect && gravedadSelect.selectedIndex > 0 ?
+                    gravedadSelect.options[gravedadSelect.selectedIndex].text : '';
+
+                const riskSelectsDiv = clonedDoc.querySelector('div.space-y-4');
+                if (riskSelectsDiv) {
+                    riskSelectsDiv.innerHTML = `
+                    <p class="text-sm font-medium text-gray-700"><strong>Probabilidad:</strong> ${selectedProbabilidad ||
+                        'No seleccionado'}</p>
+                    <p class="text-sm font-medium text-gray-700"><strong>Gravedad:</strong> ${selectedGravedad || 'No seleccionada'}</p>
+                    `;
+                }
+
+                // Clone risk result box styles
+                const clonedRiskResultBox = clonedDoc.getElementById('risk-result-box');
+                const clonedRiskDisplayText = clonedDoc.getElementById('risk-display-text');
+                if (clonedRiskResultBox && riskResultBox) {
+                    clonedRiskResultBox.style.backgroundColor =
+                        riskResultBox.style.backgroundColor;
+                    clonedRiskResultBox.style.border = '1px solid #e2e8f0';
+                }
+                if (clonedRiskDisplayText && riskDisplayText) {
+                    clonedRiskDisplayText.textContent = riskDisplayText.textContent;
+                    clonedRiskDisplayText.style.color = '#1f2937';
+                    clonedRiskDisplayText.classList.add('font-bold', 'uppercase', 'text-xl');
+                }
+
+                const clonedReportContent = clonedDoc.getElementById('report-content');
+                if (clonedReportContent) {
+                    clonedReportContent.style.boxShadow = 'none';
+                    clonedReportContent.style.border = 'none';
+                }
+
+                // --- Handle Photo Previews Container for PDF ---
+                const clonedPhotoPreviewsContainer = clonedDoc.getElementById('photo-previews-container');
+                if (clonedPhotoPreviewsContainer) {
+                    clonedPhotoPreviewsContainer.innerHTML = `
+                    <p style="text-align: center; color: gray; width: 100%; padding: 20px;">
+                    Las fotos se añadirán en paginas separadas al final del informe para mantener su tamaño original.
+                    </p>
+                    `;
+                    clonedPhotoPreviewsContainer.style.display = 'block';
+                    clonedPhotoPreviewsContainer.style.border = '1px dashed #cccccc';
+                    clonedPhotoPreviewsContainer.style.minHeight = '100px';
+                    clonedPhotoPreviewsContainer.style.alignItems = 'center';
+                    clonedPhotoPreviewsContainer.style.justifyContent = 'center';
+                }
+
+                 // Hide UI elements not needed in PDF (e.g., photo upload button)
+                 const clonedAddPhotoLabel = clonedDoc.getElementById('add-photo-label');
+                 if (clonedAddPhotoLabel) clonedAddPhotoLabel.style.display = 'none';
+            };
+
+            // --- GENERATE PAGE 1 ---
+            await html2canvas(reportContent, {
+                scale: 2,
+                useCORS: true,
+                logging: false,
+                onclone: (clonedDoc) => {
+                    applyClonedTransformations(clonedDoc);
+                    // For Page 1, hide the second page section
+                    const clonedSecondPageSection = clonedDoc.getElementById('second-page-section');
+                    if (clonedSecondPageSection) {
+                        clonedSecondPageSection.style.display = 'none';
+                        // También oculta el hr antes de él si es el hermano anterior inmediato
+                        if (clonedSecondPageSection.previousElementSibling && clonedSecondPageSection.previousElementSibling.tagName === 'HR') {
+                            clonedSecondPageSection.previousElementSibling.style.display = 'none';
+                        }
+                    }
+                }
+            }).then(canvas => {
+                const imgData = canvas.toDataURL('image/jpeg', 1.0);
+                const imgHeight = (canvas.height * contentWidth) / canvas.width;
+                pdf.addImage(imgData, 'JPEG', margin, margin, contentWidth, imgHeight);
+            }).catch(error => {
+                console.error("Error al generar la Página 1 del PDF:", error);
+                if (loadingModal) loadingModal.classList.add('hidden');
+                alert('Hubo un error al generar la Página 1 del PDF. Por favor, intente de nuevo: ' + error.message);
+                throw error; // Propagate error to stop execution
+            });
+
+            // --- GENERATE PAGE 2 ---
+            pdf.addPage(); // Add a new page for the second section
+
+            await html2canvas(reportContent, {
+                scale: 2,
+                useCORS: true,
+                logging: false,
+                onclone: (clonedDoc) => {
+                    applyClonedTransformations(clonedDoc);
+
+                    // For Page 2, hide everything before the second page section
+                    const clonedSecondPageSection = clonedDoc.getElementById('second-page-section');
+                    if (clonedSecondPageSection) {
+                        let currentElement = clonedSecondPageSection.previousElementSibling;
+                        while (currentElement) {
+                            currentElement.style.display = 'none';
+                            currentElement = currentElement.previousElementSibling;
+                        }
+                        // También oculta el encabezado si está fuera de report-content (no en tu HTML actual, pero es bueno anotarlo)
+                        const clonedHeader = clonedDoc.querySelector('header');
+                        if(clonedHeader) clonedHeader.style.display = 'none';
+
+                        // Asegura que la sección de la segunda página sea visible
+                        clonedSecondPageSection.style.display = 'block';
+                    }
+                }
+            }).then(canvas => {
+                const imgData = canvas.toDataURL('image/jpeg', 1.0);
+                const imgHeight = (canvas.height * contentWidth) / canvas.width;
+                pdf.addImage(imgData, 'JPEG', margin, margin, contentWidth, imgHeight);
+            }).catch(error => {
+                console.error("Error al generar la Página 2 del PDF:", error);
+                if (loadingModal) loadingModal.classList.add('hidden');
+                alert('Hubo un error al generar la Página 2 del PDF. Por favor, intente de nuevo: ' + error.message);
+                throw error; // Propagate error to stop execution
+            });
+
+            // --- ADD CAPTURED IMAGES INDIVIDUALLY AT THE END OF THE PDF ---
+            if (capturedImages.length > 0) {
+                let imagesProcessed = 0;
+                for (const imgDataUrl of capturedImages) { // Usa for...of para compatibilidad con async/await
+                    await new Promise((resolve, reject) => {
+                        const tempImg = new Image();
+                        tempImg.onload = function() {
+                            pdf.addPage();
+
+                            const imgAspectRatio = tempImg.width / tempImg.height;
+                            let photoWidthPdf = contentWidth;
+                            let photoHeightPdf = photoWidthPdf / imgAspectRatio;
+
+                            // Si la altura calculada es demasiado alta para la página, escala hacia abajo según la altura
+                            if (photoHeightPdf > (pdfHeight - (margin * 2))) { // Usa pdfHeight para el límite de la página
+                                photoHeightPdf = (pdfHeight - (margin * 2));
+                                photoWidthPdf = photoHeightPdf * imgAspectRatio;
+                            }
+
+                            // Centra la foto en la nueva página
+                            const xPos = (pdfWidth - photoWidthPdf) / 2;
+                            const yPos = (pdfHeight - photoHeightPdf) / 2;
+
+                            pdf.addImage(imgDataUrl, 'JPEG', xPos, yPos, photoWidthPdf, photoHeightPdf);
+                            imagesProcessed++;
+                            resolve();
+                        };
+                        tempImg.onerror = reject;
+                        tempImg.src = imgDataUrl;
+                    });
+                }
+            }
+
+            // --- FINALIZE PDF DOWNLOAD ---
+            const companyName = document.getElementById('company-name').value || 'SinNombre';
+            const date = new Date().toISOString().slice(0, 10);
+            const filename = `InformeDeRiesgo_${companyName}_${date}.pdf`;
+
+            pdfBlob = pdf.output('blob');
+
+            const url = URL.createObjectURL(pdfBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            if (loadingModal) loadingModal.classList.add('hidden');
+            if (emailModal) emailModal.classList.remove('hidden');
+
+        });
+    }
+
+    if (emailNoBtn) {
+        emailNoBtn.addEventListener('click', () => {
+            if (emailModal) emailModal.classList.add('hidden');
+            clearFormData();
+        });
+    }
+
+    if (emailYesBtn) {
+        emailYesBtn.addEventListener('click', () => {
+            if (emailModal) emailModal.classList.add('hidden');
+            if (!pdfBlob) {
+                alert('No se pudo encontrar el archivo PDF para enviar.');
+                clearFormData();
+                return;
+            }
+
+            const company = document.getElementById('company-name').value || 'Reporte';
+            const recipientEmail = document.getElementById('email').value || '';
+            const subject = `Informe de Riesgo - ${company}`;
+            const body = `Hola,\n\nAdjunto el informe de riesgo generado para ${company}.\n\nSaludos.\n\n(Este es un archivo adjunto simulado. Por favor, adjunte el PDF que acaba de descargar manualmente.)`;
+            alert('Su cliente de correo se abrirá. Por favor, adjunte manualmente el archivo PDF que acaba de descargar.');
+            window.location.href = `mailto:${recipientEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+            clearFormData();
+        });
+    }
+
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js')
+                .then(registration => {
+                    console.log('Service Worker registrado con exito:', registration);
+                })
+                .catch(error => {
+                    console.log('Error al registrar el Service Worker:', error);
+                });
+        });
+    }
+});
+</script>
+</body>
+</html>
